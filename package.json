@@ -30,6 +30,11 @@
         "command": "cursor-learning-overlay.simulateAgent",
         "title": "Simulate Agent (Test)",
         "category": "Learning"
+      },
+      {
+        "command": "cursor-learning-overlay.resetSetup",
+        "title": "Reset Setup",
+        "category": "Learning"
       }
     ],
     "configuration": {

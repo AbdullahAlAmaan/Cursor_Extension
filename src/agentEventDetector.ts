@@ -5,7 +5,7 @@ export class AgentEventDetector {
     private isAgentRunning: boolean = false;
     private checkInterval: NodeJS.Timeout | undefined;
     private lastActivity: number = Date.now();
-    private idleThreshold: number = 5000; // 5 seconds of inactivity
+    private idleThreshold: number = 30000; // 30 seconds of inactivity (only for fallback)
 
     constructor(learningOverlayManager: any) {
         this.learningOverlayManager = learningOverlayManager;
@@ -17,8 +17,8 @@ export class AgentEventDetector {
         // Monitor for Cursor-specific AI agent events
         this.monitorCursorAgentEvents();
         
-        // Fallback: Monitor user activity for idle detection
-        this.monitorUserActivity();
+        // Note: We don't start idle monitoring by default
+        // The overlay should only appear when agent is actually working
     }
 
     private monitorCursorAgentEvents(): void {
