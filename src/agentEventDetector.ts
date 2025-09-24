@@ -4,32 +4,35 @@ export class AgentEventDetector {
     private learningOverlayManager: any;
     private isAgentRunning: boolean = false;
     private checkInterval: NodeJS.Timeout | undefined;
+    private lastActivity: number = Date.now();
+    private idleThreshold: number = 5000; // 5 seconds of inactivity
 
     constructor(learningOverlayManager: any) {
         this.learningOverlayManager = learningOverlayManager;
     }
 
     startMonitoring(): void {
-        // For now, we'll use a simple approach to detect when the user might be idle
-        // In a real implementation, this would listen to Cursor's actual AI agent events
+        console.log('Starting Cursor agent monitoring...');
         
-        // Check for active text editor changes as a proxy for user activity
-        let lastActivity = Date.now();
-        const idleThreshold = 30000; // 30 seconds of inactivity
+        // Monitor for Cursor-specific AI agent events
+        this.monitorCursorAgentEvents();
+        
+        // Fallback: Monitor user activity for idle detection
+        this.monitorUserActivity();
+    }
 
-        this.checkInterval = setInterval(() => {
-            const now = Date.now();
-            const timeSinceActivity = now - lastActivity;
+    private monitorCursorAgentEvents(): void {
+        // Listen for Cursor's AI agent events
+        // These are Cursor-specific events that we need to detect
+        
+        // Check for AI agent status periodically
+        this.checkInterval = setInterval(async () => {
+            await this.checkAgentStatus();
+        }, 2000); // Check every 2 seconds
 
-            // If user has been idle for more than threshold and agent isn't running, start overlay
-            if (timeSinceActivity > idleThreshold && !this.isAgentRunning) {
-                this.simulateAgentStart();
-            }
-        }, 5000); // Check every 5 seconds
-
-        // Listen for editor changes to reset idle timer
+        // Listen for editor changes to detect when user is active
         vscode.workspace.onDidChangeTextDocument(() => {
-            lastActivity = Date.now();
+            this.lastActivity = Date.now();
             if (this.isAgentRunning) {
                 this.simulateAgentEnd();
             }
@@ -37,19 +40,63 @@ export class AgentEventDetector {
 
         // Listen for cursor position changes
         vscode.window.onDidChangeTextEditorSelection(() => {
-            lastActivity = Date.now();
+            this.lastActivity = Date.now();
             if (this.isAgentRunning) {
                 this.simulateAgentEnd();
             }
         });
 
         // Listen for file changes
-        vscode.workspace.onDidChangeTextDocument(() => {
-            lastActivity = Date.now();
+        vscode.workspace.onDidOpenTextDocument(() => {
+            this.lastActivity = Date.now();
             if (this.isAgentRunning) {
                 this.simulateAgentEnd();
             }
         });
+    }
+
+    private monitorUserActivity(): void {
+        // Monitor for user activity to detect idle time
+        setInterval(() => {
+            const now = Date.now();
+            const timeSinceActivity = now - this.lastActivity;
+
+            // If user has been idle for more than threshold and agent isn't running, start overlay
+            if (timeSinceActivity > this.idleThreshold && !this.isAgentRunning) {
+                console.log('User idle detected, starting learning overlay');
+                this.simulateAgentStart();
+            }
+        }, 2000); // Check every 2 seconds for faster response
+    }
+
+    private async checkAgentStatus(): Promise<void> {
+        try {
+            // Check if Cursor's AI agent is running
+            // This is a simplified check - in a real implementation, we'd listen to Cursor's actual events
+            
+            // For now, we'll use a heuristic: if there's no user activity for a while,
+            // and no recent editor changes, assume the agent might be running
+            const now = Date.now();
+            const timeSinceActivity = now - this.lastActivity;
+            
+            if (timeSinceActivity > this.idleThreshold && !this.isAgentRunning) {
+                // Check if there are any active AI operations
+                const hasActiveAI = await this.detectActiveAIOperations();
+                if (hasActiveAI) {
+                    this.simulateAgentStart();
+                }
+            }
+        } catch (error) {
+            console.error('Error checking agent status:', error);
+        }
+    }
+
+    private async detectActiveAIOperations(): Promise<boolean> {
+        // This is a placeholder for detecting active AI operations
+        // In a real implementation, this would check Cursor's AI agent status
+        
+        // For now, we'll use a simple heuristic based on user activity
+        return this.lastActivity < Date.now() - this.idleThreshold;
     }
 
     // Simulate agent start (for testing purposes)

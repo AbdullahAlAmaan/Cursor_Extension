@@ -36,8 +36,8 @@ export function activate(context: vscode.ExtensionContext) {
         learningOverlayManager.showOverlay();
     });
 
-    const onDidEndTask = vscode.commands.registerCommand('cursor-learning-overlay.onDidEndTask', () => {
-        learningOverlayManager.hideOverlay();
+    const onDidEndTask = vscode.commands.registerCommand('cursor-learning-overlay.onDidEndTask', async () => {
+        await learningOverlayManager.hideOverlay();
     });
 
     // Listen for Cursor-specific events (we'll need to detect these)
@@ -59,7 +59,19 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Initialize the overlay manager and start monitoring
     learningOverlayManager.initialize();
+    
+    // Start monitoring immediately for automatic operation
     agentEventDetector.startMonitoring();
+    
+    // Show welcome message
+    vscode.window.showInformationMessage(
+        'Cursor Learning Overlay is now active! It will automatically show learning content when you\'re idle.',
+        'Open Settings'
+    ).then(selection => {
+        if (selection === 'Open Settings') {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'cursorLearningOverlay');
+        }
+    });
 }
 
 export function deactivate() {

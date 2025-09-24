@@ -9,6 +9,7 @@ export class LearningOverlayManager {
     private isVisible: boolean = false;
     private currentContent: LearningContent | null = null;
     private isGenerating: boolean = false;
+    private contentRotationInterval: NodeJS.Timeout | undefined;
 
     constructor(ollamaService: OllamaService, localStorage: LocalStorage) {
         this.ollamaService = ollamaService;
@@ -36,9 +37,10 @@ export class LearningOverlayManager {
             return;
         }
 
+        console.log('Showing learning overlay...');
         this.isVisible = true;
         
-        // Create or show the webview panel
+        // Create or show the webview panel with fullscreen behavior
         if (!this.panel) {
             this.panel = vscode.window.createWebviewPanel(
                 'learningOverlay',
@@ -47,9 +49,18 @@ export class LearningOverlayManager {
                 {
                     enableScripts: true,
                     retainContextWhenHidden: true,
-                    localResourceRoots: []
+                    localResourceRoots: [],
+                    enableFindWidget: false,
+                    enableCommandUris: true
                 }
             );
+
+            // Hide all other panels to make it truly fullscreen
+            await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+            await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
+            await vscode.commands.executeCommand('workbench.action.togglePanel');
+            await vscode.commands.executeCommand('workbench.action.toggleStatusbarVisibility');
+            await vscode.commands.executeCommand('workbench.action.toggleMenuBar');
 
             // Handle panel disposal
             this.panel.onDidDispose(() => {
@@ -81,12 +92,26 @@ export class LearningOverlayManager {
         // Generate initial content
         await this.generateNewContent();
         
+        // Start content rotation for continuous learning
+        this.startContentRotation();
+        
         // Show the panel
         this.panel.reveal(vscode.ViewColumn.One);
     }
 
-    hideOverlay(): void {
+    async hideOverlay(): Promise<void> {
         if (this.panel && this.isVisible) {
+            console.log('Hiding learning overlay...');
+            
+            // Stop content rotation
+            this.stopContentRotation();
+            
+            // Restore UI elements
+            await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
+            await vscode.commands.executeCommand('workbench.action.togglePanel');
+            await vscode.commands.executeCommand('workbench.action.toggleStatusbarVisibility');
+            await vscode.commands.executeCommand('workbench.action.toggleMenuBar');
+            
             this.panel.dispose();
             this.panel = undefined;
             this.isVisible = false;
@@ -230,16 +255,31 @@ export class LearningOverlayManager {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Learning Time</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             height: 100vh;
+            width: 100vw;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
         }
         .card {
             background: rgba(255, 255, 255, 0.1);
@@ -560,7 +600,25 @@ export class LearningOverlayManager {
 </html>`;
     }
 
+    private startContentRotation(): void {
+        // Rotate content every 30 seconds for continuous learning
+        this.contentRotationInterval = setInterval(async () => {
+            if (this.isVisible && this.panel) {
+                console.log('Rotating learning content...');
+                await this.generateNewContent();
+            }
+        }, 30000); // 30 seconds
+    }
+
+    private stopContentRotation(): void {
+        if (this.contentRotationInterval) {
+            clearInterval(this.contentRotationInterval);
+            this.contentRotationInterval = undefined;
+        }
+    }
+
     dispose(): void {
+        this.stopContentRotation();
         this.hideOverlay();
     }
 }
