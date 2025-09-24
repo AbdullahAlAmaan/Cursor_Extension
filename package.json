@@ -1,0 +1,73 @@
+{
+  "name": "cursor-learning-overlay",
+  "displayName": "Cursor Learning Overlay",
+  "description": "Transform idle time during AI agent execution into productive microlearning",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cursor-learning-overlay.toggle",
+        "title": "Toggle Learning Overlay",
+        "category": "Learning"
+      },
+      {
+        "command": "cursor-learning-overlay.settings",
+        "title": "Open Settings",
+        "category": "Learning"
+      },
+      {
+        "command": "cursor-learning-overlay.simulateAgent",
+        "title": "Simulate Agent (Test)",
+        "category": "Learning"
+      }
+    ],
+    "configuration": {
+      "title": "Cursor Learning Overlay",
+      "properties": {
+        "cursorLearningOverlay.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the learning overlay during AI agent execution"
+        },
+        "cursorLearningOverlay.topics": {
+          "type": "array",
+          "default": ["JavaScript", "TypeScript", "React", "Node.js", "AI/ML"],
+          "description": "Topics for learning content"
+        },
+        "cursorLearningOverlay.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama API URL"
+        },
+        "cursorLearningOverlay.model": {
+          "type": "string",
+          "default": "wizardlm2:latest",
+          "description": "Ollama model to use for content generation"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}
