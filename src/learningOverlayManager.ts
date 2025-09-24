@@ -7,9 +7,12 @@ export class LearningOverlayManager {
     private ollamaService: OllamaService;
     private localStorage: LocalStorage;
     private isVisible: boolean = false;
-    private currentContent: LearningContent | null = null;
+    private currentFunFact: LearningContent | null = null;
+    private currentQuiz: LearningContent | null = null;
     private isGenerating: boolean = false;
     private contentRotationInterval: NodeJS.Timeout | undefined;
+    private currentState: 'funfact' | 'quiz' | 'agent-completed' = 'funfact';
+    private agentCompleted: boolean = false;
 
     constructor(ollamaService: OllamaService, localStorage: LocalStorage) {
         this.ollamaService = ollamaService;
@@ -39,6 +42,8 @@ export class LearningOverlayManager {
 
         console.log('Showing learning overlay...');
         this.isVisible = true;
+        this.agentCompleted = false;
+        this.currentState = 'funfact';
         
         // Create or show the webview panel with fullscreen behavior
         if (!this.panel) {
@@ -61,6 +66,9 @@ export class LearningOverlayManager {
             await vscode.commands.executeCommand('workbench.action.togglePanel');
             await vscode.commands.executeCommand('workbench.action.toggleStatusbarVisibility');
             await vscode.commands.executeCommand('workbench.action.toggleMenuBar');
+            
+            // Ensure the panel takes full screen
+            await vscode.commands.executeCommand('workbench.action.toggleFullScreen');
 
             // Handle panel disposal
             this.panel.onDidDispose(() => {
@@ -72,16 +80,22 @@ export class LearningOverlayManager {
             this.panel.webview.onDidReceiveMessage(
                 async message => {
                     switch (message.type) {
-                        case 'generateContent':
-                            await this.generateNewContent();
+                        case 'generateFunFact':
+                            await this.generateFunFact();
+                            break;
+                        case 'generateQuiz':
+                            await this.generateQuiz();
                             break;
                         case 'answerSelected':
                             this.handleAnswerSelected(message.answerIndex);
                             break;
-                        case 'nextQuestion':
-                            await this.generateNewContent();
+                        case 'nextFunFact':
+                            await this.generateFunFact();
                             break;
                         case 'closeOverlay':
+                            this.hideOverlay();
+                            break;
+                        case 'returnToIDE':
                             this.hideOverlay();
                             break;
                     }
@@ -89,8 +103,8 @@ export class LearningOverlayManager {
             );
         }
 
-        // Generate initial content
-        await this.generateNewContent();
+        // Generate initial fun fact
+        await this.generateFunFact();
         
         // Start content rotation for continuous learning
         this.startContentRotation();
@@ -111,6 +125,7 @@ export class LearningOverlayManager {
             await vscode.commands.executeCommand('workbench.action.togglePanel');
             await vscode.commands.executeCommand('workbench.action.toggleStatusbarVisibility');
             await vscode.commands.executeCommand('workbench.action.toggleMenuBar');
+            await vscode.commands.executeCommand('workbench.action.toggleFullScreen');
             
             this.panel.dispose();
             this.panel = undefined;
@@ -126,65 +141,89 @@ export class LearningOverlayManager {
         }
     }
 
-    private async generateNewContent(): Promise<void> {
+    private async generateFunFact(): Promise<void> {
         if (this.isGenerating || !this.panel) {
             return;
         }
 
         this.isGenerating = true;
+        this.currentState = 'funfact';
         
         try {
             // Show loading state
             this.panel.webview.html = this.getLoadingHtml();
 
             const topics = this.localStorage.getTopics();
-            let content: LearningContent | null = null;
-            let attempts = 0;
-            const maxAttempts = 3;
-
-            // Try to generate content that hasn't been asked before
-            while (attempts < maxAttempts) {
-                content = await this.ollamaService.generateLearningContent(topics);
-                
-                if (content && !this.localStorage.shouldAvoidQuestion(content.question)) {
-                    break;
-                }
-                attempts++;
-            }
-
-            if (!content) {
-                // Fallback to any content if we can't generate new ones
-                content = await this.ollamaService.generateLearningContent(topics);
-            }
+            const content = await this.ollamaService.generateFunFact(topics);
 
             if (content) {
-                this.currentContent = content;
-                this.localStorage.markQuestionAsUsed(content.question);
+                this.currentFunFact = content;
                 this.localStorage.addToLastUsedTopics(content.topic);
                 
-                // Update the webview with the new content
-                this.panel.webview.html = this.getContentHtml(content);
+                // Update the webview with the fun fact
+                this.panel.webview.html = this.getFunFactHtml(content);
             } else {
                 // Show error state
                 this.panel.webview.html = this.getErrorHtml();
             }
         } catch (error) {
-            console.error('Error generating content:', error);
+            console.error('Error generating fun fact:', error);
             this.panel.webview.html = this.getErrorHtml();
         } finally {
             this.isGenerating = false;
         }
     }
 
-    private handleAnswerSelected(answerIndex: number): void {
-        if (!this.currentContent || !this.panel) {
+    private async generateQuiz(): Promise<void> {
+        if (this.isGenerating || !this.panel || !this.currentFunFact) {
             return;
         }
 
-        const isCorrect = answerIndex === this.currentContent.correctAnswer;
+        this.isGenerating = true;
+        this.currentState = 'quiz';
+        
+        try {
+            // Show loading state
+            this.panel.webview.html = this.getLoadingHtml();
+
+            // Generate quiz based on the current fun fact
+            const quiz = await this.ollamaService.generateQuizFromFunFact(this.currentFunFact);
+
+            if (quiz) {
+                this.currentQuiz = quiz;
+                this.localStorage.markQuestionAsUsed(quiz.question);
+                
+                // Update the webview with the quiz
+                this.panel.webview.html = this.getQuizHtml(quiz);
+            } else {
+                // Show error state
+                this.panel.webview.html = this.getErrorHtml();
+            }
+        } catch (error) {
+            console.error('Error generating quiz:', error);
+            this.panel.webview.html = this.getErrorHtml();
+        } finally {
+            this.isGenerating = false;
+        }
+    }
+
+    notifyAgentCompleted(): void {
+        this.agentCompleted = true;
+        if (this.panel && this.isVisible) {
+            // Show agent completion notification
+            this.panel.webview.html = this.getAgentCompletedHtml();
+        }
+    }
+
+    private handleAnswerSelected(answerIndex: number): void {
+        if (!this.currentQuiz || !this.panel) {
+            return;
+        }
+
+        const isCorrect = answerIndex === this.currentQuiz.correctAnswer;
         
         // Update the webview to show the result
-        this.panel.webview.html = this.getResultHtml(this.currentContent, answerIndex, isCorrect);
+        this.panel.webview.html = this.getQuizResultHtml(this.currentQuiz, answerIndex, isCorrect);
     }
 
     private getLoadingHtml(): string {
@@ -242,6 +281,494 @@ export class LearningOverlayManager {
         <h1>Preparing your learning...</h1>
         <p>Generating something interesting for you</p>
     </div>
+</body>
+</html>`;
+    }
+
+    private getFunFactHtml(content: LearningContent): string {
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Time</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .topic {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+        .fun-fact {
+            font-size: 1.4rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .test-me-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+        .test-me-btn:hover {
+            background: white;
+            color: #667eea;
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        .agent-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="agent-status">🤖 Agent Working...</div>
+    <button class="close-btn" onclick="closeOverlay()">×</button>
+    
+    <div class="card">
+        <div class="topic">${content.topic}</div>
+        <div class="fun-fact">${content.funFact}</div>
+        <button class="test-me-btn" onclick="generateQuiz()">Test Your Knowledge!</button>
+        <button class="test-me-btn" onclick="nextFunFact()">Next Fun Fact</button>
+    </div>
+
+    <script>
+        function generateQuiz() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'generateQuiz'
+            });
+        }
+        
+        function nextFunFact() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'generateFunFact'
+            });
+        }
+        
+        function closeOverlay() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'closeOverlay'
+            });
+        }
+    </script>
+</body>
+</html>`;
+    }
+
+    private getQuizHtml(content: LearningContent): string {
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Time</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .topic {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+        .question {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 30px;
+        }
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .option {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid transparent;
+            padding: 15px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.1rem;
+        }
+        .option:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        .agent-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="agent-status">🤖 Agent Working...</div>
+    <button class="close-btn" onclick="closeOverlay()">×</button>
+    
+    <div class="card">
+        <div class="topic">${content.topic}</div>
+        <div class="question">${content.question}</div>
+        <div class="options">
+            ${content.options.map((option, index) => 
+                `<div class="option" onclick="selectAnswer(${index})">${option}</div>`
+            ).join('')}
+        </div>
+    </div>
+
+    <script>
+        function selectAnswer(answerIndex) {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'answerSelected',
+                answerIndex: answerIndex
+            });
+        }
+        
+        function closeOverlay() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'closeOverlay'
+            });
+        }
+    </script>
+</body>
+</html>`;
+    }
+
+    private getAgentCompletedHtml(): string {
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Time</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        .title {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        .return-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+        .return-btn:hover {
+            background: white;
+            color: #22c55e;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="success-icon">✅</div>
+        <div class="title">Agent Finished!</div>
+        <div class="subtitle">Your AI agent has completed its task. You can now return to your work.</div>
+        <button class="return-btn" onclick="returnToIDE()">Return to Cursor IDE</button>
+    </div>
+
+    <script>
+        function returnToIDE() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'returnToIDE'
+            });
+        }
+    </script>
+</body>
+</html>`;
+    }
+
+    private getQuizResultHtml(content: LearningContent, selectedAnswer: number, isCorrect: boolean): string {
+        const correctOption = content.options[content.correctAnswer];
+        const selectedOption = content.options[selectedAnswer];
+        
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Time</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .result-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        .correct { color: #4ade80; }
+        .incorrect { color: #f87171; }
+        .explanation {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .next-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+        .next-btn:hover {
+            background: white;
+            color: #667eea;
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        .agent-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="agent-status">🤖 Agent Working...</div>
+    <button class="close-btn" onclick="closeOverlay()">×</button>
+    
+    <div class="card">
+        <div class="result-icon ${isCorrect ? 'correct' : 'incorrect'}">
+            ${isCorrect ? '🎉' : '❌'}
+        </div>
+        
+        <h2>${isCorrect ? 'Correct!' : 'Not quite right'}</h2>
+        
+        <div class="explanation">
+            <p><strong>Your answer:</strong> ${selectedOption}</p>
+            <p><strong>Correct answer:</strong> ${correctOption}</p>
+            <p><strong>Explanation:</strong> ${content.explanation}</p>
+        </div>
+        
+        <button class="next-btn" onclick="nextFunFact()">Next Fun Fact</button>
+        <button class="next-btn" onclick="closeOverlay()">Close</button>
+    </div>
+
+    <script>
+        function nextFunFact() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'generateFunFact'
+            });
+        }
+        
+        function closeOverlay() {
+            const vscode = acquireVsCodeApi();
+            vscode.postMessage({
+                type: 'closeOverlay'
+            });
+        }
+    </script>
 </body>
 </html>`;
     }
@@ -601,11 +1128,11 @@ export class LearningOverlayManager {
     }
 
     private startContentRotation(): void {
-        // Rotate content every 30 seconds for continuous learning
+        // Rotate fun facts every 30 seconds for continuous learning
         this.contentRotationInterval = setInterval(async () => {
-            if (this.isVisible && this.panel) {
+            if (this.isVisible && this.panel && this.currentState === 'funfact' && !this.agentCompleted) {
                 console.log('Rotating learning content...');
-                await this.generateNewContent();
+                await this.generateFunFact();
             }
         }, 30000); // 30 seconds
     }
