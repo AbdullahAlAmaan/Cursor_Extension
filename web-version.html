@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursor Learning Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 800px;
+            padding: 2rem;
+        }
+        
+        .title {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 300;
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .fun-fact {
+            font-size: 1.5rem;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+        
+        .quiz-section {
+            margin-top: 2rem;
+        }
+        
+        .quiz-question {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+        }
+        
+        .quiz-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .quiz-option {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .quiz-option:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .quiz-option.selected {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: white;
+        }
+        
+        .quiz-option.correct {
+            background: rgba(76, 175, 80, 0.8);
+            border-color: #4CAF50;
+        }
+        
+        .quiz-option.incorrect {
+            background: rgba(244, 67, 54, 0.8);
+            border-color: #F44336;
+        }
+        
+        .quiz-result {
+            font-size: 1.2rem;
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .next-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+        
+        .next-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status">AI Agent Working...</div>
+    
+    <div class="container">
+        <h1 class="title">🎓 Learning Time!</h1>
+        <p class="subtitle">Your AI agent is working hard. Let's learn something new!</p>
+        
+        <div class="content">
+            <div id="fun-fact-section">
+                <div class="fun-fact" id="fun-fact">
+                    Loading interesting fact...
+                </div>
+            </div>
+            
+            <div class="quiz-section hidden" id="quiz-section">
+                <div class="quiz-question" id="quiz-question">
+                    Quiz question will appear here
+                </div>
+                <div class="quiz-options" id="quiz-options">
+                    <!-- Quiz options will be generated here -->
+                </div>
+                <div class="quiz-result hidden" id="quiz-result">
+                    <!-- Quiz result will appear here -->
+                </div>
+                <button class="next-button hidden" id="next-button" onclick="nextQuestion()">
+                    Next Question
+                </button>
+            </div>
+            
+            <button class="next-button" id="quiz-button" onclick="startQuiz()">
+                🧠 Take a Quiz!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentQuestion = 0;
+        let selectedAnswer = null;
+        let questions = [];
+        
+        // Sample learning content
+        const learningContent = {
+            topics: ['AI/ML', 'System Design', 'Programming', 'Science', 'History'],
+            funFacts: [
+                "The human brain contains approximately 86 billion neurons, similar to the number of stars in the Milky Way galaxy.",
+                "The first computer bug was an actual bug - a moth found trapped in a Harvard Mark II computer in 1947.",
+                "The term 'machine learning' was coined in 1959 by Arthur Samuel, who defined it as 'the field of study that gives computers the ability to learn without being explicitly programmed.'",
+                "The first website ever created is still online at http://info.cern.ch/hypertext/WWW/TheProject.html",
+                "The concept of 'cloud computing' was first mentioned in a 1996 Compaq internal document, but it didn't become popular until the 2000s."
+            ],
+            quizQuestions: [
+                {
+                    question: "What does AI stand for?",
+                    options: ["Artificial Intelligence", "Automated Intelligence", "Advanced Intelligence", "Augmented Intelligence"],
+                    correct: 0
+                },
+                {
+                    question: "Which programming language was created by Guido van Rossum?",
+                    options: ["Java", "Python", "C++", "JavaScript"],
+                    correct: 1
+                },
+                {
+                    question: "What is the time complexity of binary search?",
+                    options: ["O(n)", "O(log n)", "O(n²)", "O(1)"],
+                    correct: 1
+                }
+            ]
+        };
+        
+        function showFunFact() {
+            const funFact = learningContent.funFacts[Math.floor(Math.random() * learningContent.funFacts.length)];
+            document.getElementById('fun-fact').textContent = funFact;
+        }
+        
+        function startQuiz() {
+            document.getElementById('fun-fact-section').classList.add('hidden');
+            document.getElementById('quiz-section').classList.remove('hidden');
+            document.getElementById('quiz-button').classList.add('hidden');
+            
+            questions = [...learningContent.quizQuestions];
+            currentQuestion = 0;
+            showQuestion();
+        }
+        
+        function showQuestion() {
+            if (currentQuestion >= questions.length) {
+                showQuizComplete();
+                return;
+            }
+            
+            const question = questions[currentQuestion];
+            document.getElementById('quiz-question').textContent = question.question;
+            
+            const optionsContainer = document.getElementById('quiz-options');
+            optionsContainer.innerHTML = '';
+            
+            question.options.forEach((option, index) => {
+                const optionElement = document.createElement('div');
+                optionElement.className = 'quiz-option';
+                optionElement.textContent = option;
+                optionElement.onclick = () => selectAnswer(index);
+                optionsContainer.appendChild(optionElement);
+            });
+            
+            document.getElementById('quiz-result').classList.add('hidden');
+            document.getElementById('next-button').classList.add('hidden');
+            selectedAnswer = null;
+        }
+        
+        function selectAnswer(index) {
+            selectedAnswer = index;
+            
+            // Remove previous selections
+            document.querySelectorAll('.quiz-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // Highlight selected option
+            document.querySelectorAll('.quiz-option')[index].classList.add('selected');
+            
+            // Show result
+            const question = questions[currentQuestion];
+            const isCorrect = index === question.correct;
+            
+            document.querySelectorAll('.quiz-option').forEach((option, i) => {
+                if (i === question.correct) {
+                    option.classList.add('correct');
+                } else if (i === index && !isCorrect) {
+                    option.classList.add('incorrect');
+                }
+            });
+            
+            const result = document.getElementById('quiz-result');
+            result.textContent = isCorrect ? '🎉 Correct!' : '❌ Incorrect. The correct answer is: ' + question.options[question.correct];
+            result.classList.remove('hidden');
+            
+            document.getElementById('next-button').classList.remove('hidden');
+        }
+        
+        function nextQuestion() {
+            currentQuestion++;
+            showQuestion();
+        }
+        
+        function showQuizComplete() {
+            document.getElementById('quiz-section').innerHTML = `
+                <div style="text-align: center;">
+                    <h2>🎉 Quiz Complete!</h2>
+                    <p>Great job! You've learned something new while your AI agent was working.</p>
+                    <button class="next-button" onclick="showFunFact()">Back to Fun Facts</button>
+                </div>
+            `;
+        }
+        
+        // Initialize
+        showFunFact();
+        
+        // Simulate agent completion after 30 seconds
+        setTimeout(() => {
+            document.getElementById('status').textContent = 'AI Agent Complete!';
+            document.getElementById('status').style.background = 'rgba(76, 175, 80, 0.8)';
+        }, 30000);
+    </script>
+</body>
+</html>

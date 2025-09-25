@@ -64,6 +64,25 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage('Extension is working! Commands are registered successfully.');
     });
 
+    // Debug Cursor API command
+    const debugCursorAPICommand = vscode.commands.registerCommand('cursor-learning-overlay.debugAPI', () => {
+        console.log('=== CURSOR API DEBUG ===');
+        
+        // Check what Cursor exposes
+        console.log('vscode object keys:', Object.keys(vscode));
+        console.log('vscode.cursor:', (vscode as any).cursor);
+        console.log('vscode.cursor?.mcp:', (vscode as any).cursor?.mcp);
+        console.log('vscode.cursor?.agent:', (vscode as any).cursor?.agent);
+        
+        // Check available commands
+        vscode.commands.getCommands().then(commands => {
+            const cursorCommands = commands.filter(cmd => cmd.includes('cursor') || cmd.includes('agent') || cmd.includes('ai'));
+            console.log('Cursor-related commands:', cursorCommands);
+        });
+        
+        vscode.window.showInformationMessage('Check console for Cursor API debug info!');
+    });
+
     // Real agent event listeners for Cursor AI integration
     setupRealAgentListeners();
 
@@ -72,7 +91,8 @@ export function activate(context: vscode.ExtensionContext) {
         settingsCommand,
         simulateAgentCommand,
         resetSetupCommand,
-        testCommand
+        testCommand,
+        debugCursorAPICommand
     );
     
     console.log('Commands registered successfully');

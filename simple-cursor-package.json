@@ -1,0 +1,22 @@
+{
+  "name": "simple-cursor-extension",
+  "displayName": "Simple Cursor Extension",
+  "description": "A simple test extension for Cursor",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./simple-cursor-extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "simple-cursor.hello",
+        "title": "Hello Cursor",
+        "category": "Test"
+      }
+    ]
+  }
+}

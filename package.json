@@ -40,6 +40,11 @@
         "command": "cursor-learning-overlay.test",
         "title": "Test Extension",
         "category": "Learning"
+      },
+      {
+        "command": "cursor-learning-overlay.debugAPI",
+        "title": "Debug Cursor API",
+        "category": "Learning"
       }
     ],
     "configuration": {

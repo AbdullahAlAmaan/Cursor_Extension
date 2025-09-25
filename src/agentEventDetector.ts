@@ -16,7 +16,10 @@ export class AgentEventDetector {
     startMonitoring(): void {
         console.log('Starting REAL Cursor agent monitoring...');
         
-        // Real Cursor AI detection - monitor actual patterns
+        // Try to access Cursor's real agent API first
+        this.setupRealCursorAgentAPI();
+        
+        // Fallback to heuristic detection if real API not available
         this.monitorRealCursorAI();
         
         // Monitor for user prompts and agent activity
@@ -24,6 +27,76 @@ export class AgentEventDetector {
         
         // Start continuous monitoring for AI activity
         this.startContinuousMonitoring();
+    }
+
+    private setupRealCursorAgentAPI(): void {
+        console.log('Setting up real Cursor agent API...');
+        
+        try {
+            // Try to access Cursor's MCP API
+            if (typeof (vscode as any).cursor?.mcp !== 'undefined') {
+                console.log('Cursor MCP API available!');
+                this.setupMCPMonitoring();
+            } else {
+                console.log('Cursor MCP API not available, using fallback detection');
+            }
+        } catch (error) {
+            console.log('Error accessing Cursor API:', error);
+        }
+
+        // Try to listen for Cursor-specific events
+        this.setupCursorSpecificEvents();
+    }
+
+    private setupMCPMonitoring(): void {
+        // Monitor MCP server activities
+        try {
+            // This would be the real implementation if Cursor exposes MCP events
+            console.log('Setting up MCP monitoring...');
+            
+            // Listen for MCP server events (if available)
+            if (typeof (vscode as any).cursor?.mcp?.onDidChangeServer !== 'undefined') {
+                (vscode as any).cursor.mcp.onDidChangeServer((server: any) => {
+                    console.log('MCP server changed:', server);
+                    if (server.status === 'active') {
+                        this.detectAIGeneration();
+                    }
+                });
+            }
+        } catch (error) {
+            console.log('MCP monitoring not available:', error);
+        }
+    }
+
+    private setupCursorSpecificEvents(): void {
+        console.log('Setting up Cursor-specific events...');
+        
+        // Try to access Cursor's internal events
+        try {
+            // Listen for Cursor's AI agent events (if available)
+            if (typeof (vscode as any).cursor?.agent !== 'undefined') {
+                console.log('Cursor agent API found!');
+                
+                // Try to listen for agent start/end events
+                if (typeof (vscode as any).cursor.agent.onDidStartTask !== 'undefined') {
+                    (vscode as any).cursor.agent.onDidStartTask(() => {
+                        console.log('Real Cursor agent started!');
+                        this.learningOverlayManager.showOverlay();
+                    });
+                }
+                
+                if (typeof (vscode as any).cursor.agent.onDidEndTask !== 'undefined') {
+                    (vscode as any).cursor.agent.onDidEndTask(() => {
+                        console.log('Real Cursor agent ended!');
+                        this.learningOverlayManager.hideOverlay();
+                    });
+                }
+            } else {
+                console.log('Cursor agent API not available');
+            }
+        } catch (error) {
+            console.log('Error setting up Cursor events:', error);
+        }
     }
 
     private startContinuousMonitoring(): void {

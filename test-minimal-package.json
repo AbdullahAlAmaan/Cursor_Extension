@@ -1,0 +1,22 @@
+{
+  "name": "test-minimal",
+  "displayName": "Test Minimal",
+  "description": "Minimal test extension",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./test-minimal.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "test-minimal.hello",
+        "title": "Hello Test",
+        "category": "Test"
+      }
+    ]
+  }
+}

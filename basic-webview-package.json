@@ -1,0 +1,22 @@
+{
+  "name": "basic-webview-extension",
+  "displayName": "Basic Webview Extension",
+  "description": "A basic webview test for Cursor",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./basic-webview-extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "basic-webview.show",
+        "title": "Show Learning",
+        "category": "Learning"
+      }
+    ]
+  }
+}

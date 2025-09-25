@@ -45,22 +45,28 @@ export class LearningOverlayManager {
         this.agentCompleted = false;
         this.currentState = 'funfact';
         
-        // Create or show the webview panel with fullscreen behavior
-        if (!this.panel) {
-            this.panel = vscode.window.createWebviewPanel(
-                'learningOverlay',
-                'Learning Time!',
-                vscode.ViewColumn.One,
-                {
-                    enableScripts: true,
-                    retainContextWhenHidden: true,
-                    localResourceRoots: [],
-                    enableFindWidget: false,
-                    enableCommandUris: true
-                }
-            );
+        // Always dispose existing panel first to avoid disposal errors
+        if (this.panel) {
+            this.panel.dispose();
+            this.panel = undefined;
+        }
+        
+        // Create new webview panel with fullscreen behavior
+        this.panel = vscode.window.createWebviewPanel(
+            'learningOverlay',
+            'Learning Time!',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [],
+                enableFindWidget: false,
+                enableCommandUris: true
+            }
+        );
 
-            // Hide all other panels to make it truly fullscreen
+        // Hide all other panels to make it truly fullscreen
+        try {
             await vscode.commands.executeCommand('workbench.action.closeAllEditors');
             await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
             await vscode.commands.executeCommand('workbench.action.togglePanel');
@@ -69,39 +75,41 @@ export class LearningOverlayManager {
             
             // Ensure the panel takes full screen
             await vscode.commands.executeCommand('workbench.action.toggleFullScreen');
-
-            // Handle panel disposal
-            this.panel.onDidDispose(() => {
-                this.panel = undefined;
-                this.isVisible = false;
-            });
-
-            // Handle messages from webview
-            this.panel.webview.onDidReceiveMessage(
-                async message => {
-                    switch (message.type) {
-                        case 'generateFunFact':
-                            await this.generateFunFact();
-                            break;
-                        case 'generateQuiz':
-                            await this.generateQuiz();
-                            break;
-                        case 'answerSelected':
-                            this.handleAnswerSelected(message.answerIndex);
-                            break;
-                        case 'nextFunFact':
-                            await this.generateFunFact();
-                            break;
-                        case 'closeOverlay':
-                            this.hideOverlay();
-                            break;
-                        case 'returnToIDE':
-                            this.hideOverlay();
-                            break;
-                    }
-                }
-            );
+        } catch (error) {
+            console.log('Some UI commands not available, continuing...');
         }
+
+        // Handle panel disposal
+        this.panel.onDidDispose(() => {
+            this.panel = undefined;
+            this.isVisible = false;
+        });
+
+        // Handle messages from webview
+        this.panel.webview.onDidReceiveMessage(
+            async message => {
+                switch (message.type) {
+                    case 'generateFunFact':
+                        await this.generateFunFact();
+                        break;
+                    case 'generateQuiz':
+                        await this.generateQuiz();
+                        break;
+                    case 'answerSelected':
+                        this.handleAnswerSelected(message.answerIndex);
+                        break;
+                    case 'nextFunFact':
+                        await this.generateFunFact();
+                        break;
+                    case 'closeOverlay':
+                        this.hideOverlay();
+                        break;
+                    case 'returnToIDE':
+                        this.hideOverlay();
+                        break;
+                }
+            }
+        );
 
         // Generate initial fun fact
         await this.generateFunFact();
@@ -151,7 +159,9 @@ export class LearningOverlayManager {
         
         try {
             // Show loading state
-            this.panel.webview.html = this.getLoadingHtml();
+            if (this.panel && this.panel.webview) {
+                this.panel.webview.html = this.getLoadingHtml();
+            }
 
             const topics = this.localStorage.getTopics();
             const content = await this.ollamaService.generateFunFact(topics);
