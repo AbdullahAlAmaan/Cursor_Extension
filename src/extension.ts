@@ -12,18 +12,31 @@ let agentEventDetector: AgentEventDetector;
 export function activate(context: vscode.ExtensionContext) {
     console.log('Cursor Learning Overlay extension is now active!');
 
-    // Initialize services
-    ollamaService = new OllamaService();
-    localStorage = new LocalStorage(context);
-    learningOverlayManager = new LearningOverlayManager(ollamaService, localStorage);
-    agentEventDetector = new AgentEventDetector(learningOverlayManager);
+    // Extension is starting up
 
-    // Check if this is first time setup
-    checkFirstTimeSetup(context);
+    try {
+        // Initialize services
+        ollamaService = new OllamaService();
+        localStorage = new LocalStorage(context);
+        learningOverlayManager = new LearningOverlayManager(ollamaService, localStorage);
+        agentEventDetector = new AgentEventDetector(learningOverlayManager);
+        console.log('Services initialized successfully');
+    } catch (error) {
+        console.error('Error initializing services:', error);
+        vscode.window.showErrorMessage('Failed to initialize Cursor Learning Overlay: ' + error);
+        return;
+    }
 
-    // Register commands
+    // Register commands FIRST
+    console.log('Starting command registration...');
     const toggleCommand = vscode.commands.registerCommand('cursor-learning-overlay.toggle', () => {
-        learningOverlayManager.toggle();
+        console.log('Toggle command called');
+        if (learningOverlayManager) {
+            learningOverlayManager.toggle();
+        } else {
+            console.error('LearningOverlayManager not initialized');
+            vscode.window.showErrorMessage('LearningOverlayManager not initialized');
+        }
     });
 
     const settingsCommand = vscode.commands.registerCommand('cursor-learning-overlay.settings', () => {
@@ -31,7 +44,13 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const simulateAgentCommand = vscode.commands.registerCommand('cursor-learning-overlay.simulateAgent', () => {
-        agentEventDetector.toggleAgentSimulation();
+        console.log('Simulate Agent command called');
+        if (agentEventDetector) {
+            agentEventDetector.toggleAgentSimulation();
+        } else {
+            console.error('AgentEventDetector not initialized');
+            vscode.window.showErrorMessage('AgentEventDetector not initialized');
+        }
     });
 
     const resetSetupCommand = vscode.commands.registerCommand('cursor-learning-overlay.resetSetup', async () => {
@@ -39,35 +58,36 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage('Setup reset! Please reload the window to restart the setup process.');
     });
 
-    // Register event listeners for AI agent lifecycle
-    const onDidStartTask = vscode.commands.registerCommand('cursor-learning-overlay.onDidStartTask', () => {
-        learningOverlayManager.showOverlay();
+    // Simple test command
+    const testCommand = vscode.commands.registerCommand('cursor-learning-overlay.test', () => {
+        console.log('Test command called - extension is working!');
+        vscode.window.showInformationMessage('Extension is working! Commands are registered successfully.');
     });
 
-    const onDidEndTask = vscode.commands.registerCommand('cursor-learning-overlay.onDidEndTask', async () => {
-        await learningOverlayManager.hideOverlay();
-    });
-
-    // Listen for Cursor-specific events (we'll need to detect these)
-    // For now, we'll use a simple timer-based approach as a fallback
-    let agentRunning = false;
-    const checkAgentStatus = setInterval(() => {
-        // This is a placeholder - in a real implementation, we'd listen to Cursor's actual events
-        // For now, we'll simulate this with a manual trigger
-    }, 1000);
+    // Real agent event listeners for Cursor AI integration
+    setupRealAgentListeners();
 
     context.subscriptions.push(
         toggleCommand,
         settingsCommand,
         simulateAgentCommand,
         resetSetupCommand,
-        onDidStartTask,
-        onDidEndTask,
-        { dispose: () => clearInterval(checkAgentStatus) }
+        testCommand
     );
+    
+    console.log('Commands registered successfully');
+    
+    // Test if commands are actually registered
+    vscode.commands.getCommands().then(commands => {
+        const learningCommands = commands.filter(cmd => cmd.startsWith('cursor-learning-overlay.'));
+        console.log('Available learning commands:', learningCommands);
+    });
 
     // Initialize the overlay manager
     learningOverlayManager.initialize();
+    
+    // Check if this is first time setup AFTER commands are registered
+    checkFirstTimeSetup(context);
 }
 
 export function deactivate() {
@@ -80,14 +100,22 @@ export function deactivate() {
 }
 
 async function checkFirstTimeSetup(context: vscode.ExtensionContext) {
-    const hasCompletedSetup = context.globalState.get('hasCompletedSetup', false);
-    
-    if (!hasCompletedSetup) {
-        // Show welcome and topic selection
-        await showWelcomeAndTopicSelection(context);
-    } else {
-        // Start monitoring for agent events
-        agentEventDetector.startMonitoring();
+    try {
+        const hasCompletedSetup = context.globalState.get('hasCompletedSetup', false);
+        console.log('Has completed setup:', hasCompletedSetup);
+        
+        if (!hasCompletedSetup) {
+            // Show welcome and topic selection
+            console.log('Showing welcome and topic selection');
+            await showWelcomeAndTopicSelection(context);
+        } else {
+            // Start monitoring for agent events
+            console.log('Starting agent monitoring');
+            agentEventDetector.startMonitoring();
+        }
+    } catch (error) {
+        console.error('Error in checkFirstTimeSetup:', error);
+        vscode.window.showErrorMessage('Setup error: ' + error);
     }
 }
 
@@ -153,4 +181,52 @@ async function showTopicSelection(context: vscode.ExtensionContext) {
         context.globalState.update('hasCompletedSetup', true);
         agentEventDetector.startMonitoring();
     }
+}
+
+function setupRealAgentListeners() {
+    console.log('Setting up real agent listeners...');
+    
+    // Monitor for Cursor AI chat activity
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+        if (editor) {
+            const fileName = editor.document.fileName.toLowerCase();
+            if (fileName.includes('chat') || fileName.includes('composer')) {
+                console.log('Cursor AI panel activated - starting monitoring');
+                if (agentEventDetector) {
+                    agentEventDetector.detectUserPrompt();
+                }
+            }
+        }
+    });
+
+    // Monitor for document changes that might indicate AI generation
+    vscode.workspace.onDidChangeTextDocument((event) => {
+        const fileName = event.document.fileName.toLowerCase();
+        
+        // Check if it's an AI-related document
+        if (fileName.includes('chat') || fileName.includes('composer') || fileName.includes('cursor')) {
+            console.log('AI document changed:', fileName);
+            if (agentEventDetector) {
+                agentEventDetector.detectUserPrompt();
+            }
+        }
+        
+        // Check for rapid changes (AI generation pattern)
+        if (event.contentChanges.length > 3) {
+            console.log('Rapid changes detected - possible AI generation');
+            if (agentEventDetector) {
+                agentEventDetector.detectAIGeneration();
+            }
+        }
+    });
+
+    // Monitor for workspace changes
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        console.log('Workspace changed - checking for AI activity');
+        if (agentEventDetector) {
+            agentEventDetector.checkForAIActivity();
+        }
+    });
+
+    console.log('Real agent listeners set up successfully');
 }
