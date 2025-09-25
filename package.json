@@ -17,34 +17,22 @@
   "contributes": {
     "commands": [
       {
-        "command": "cursor-learning-overlay.toggle",
-        "title": "Toggle Learning Overlay",
+        "command": "cursor-learning-overlay.showFunFact",
+        "title": "Show Fun Fact",
         "category": "Learning"
       },
       {
         "command": "cursor-learning-overlay.settings",
         "title": "Open Settings",
         "category": "Learning"
-      },
+      }
+    ],
+    "keybindings": [
       {
-        "command": "cursor-learning-overlay.simulateAgent",
-        "title": "Simulate Agent (Test)",
-        "category": "Learning"
-      },
-      {
-        "command": "cursor-learning-overlay.resetSetup",
-        "title": "Reset Setup",
-        "category": "Learning"
-      },
-      {
-        "command": "cursor-learning-overlay.test",
-        "title": "Test Extension",
-        "category": "Learning"
-      },
-      {
-        "command": "cursor-learning-overlay.debugAPI",
-        "title": "Debug Cursor API",
-        "category": "Learning"
+        "command": "cursor-learning-overlay.showFunFact",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "editorTextFocus"
       }
     ],
     "configuration": {
@@ -53,7 +41,12 @@
         "cursorLearningOverlay.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the learning overlay during AI agent execution"
+          "description": "Enable the learning overlay"
+        },
+        "cursorLearningOverlay.showButton": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Fun Fact button in the status bar"
         },
         "cursorLearningOverlay.topics": {
           "type": "array",
